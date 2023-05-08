@@ -1,14 +1,15 @@
 use std::f32::consts::PI;
 
 use egui::{Color32, FontFamily, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Vec2};
-use rand::{Rng, thread_rng, distributions::uniform::SampleUniform};
+use rand::{Rng, thread_rng, distributions::uniform::SampleUniform, seq::SliceRandom, rngs::ThreadRng};
 use serde::Serialize;
 use tracing_subscriber::field::debug;
 
 pub static SQUARE: f32 = 12.5;
+pub static WIDTH_AND_HEIGHT: u8 = 25;
 
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 struct Object {
     rect: Rect,
     color: Color32,
@@ -53,34 +54,40 @@ impl App {
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
-        let rec = Object{ rect: Rect{min: Pos2{ x: SQUARE * 7.0, y: SQUARE * 7.0}, max: Pos2{x: SQUARE * 10.0, y: SQUARE * 10.0} },
-            color: Color32::RED};
-        let objects = vec![vec![rec]];
 
-        let gen = move || rand::thread_rng().gen_range(1..15);
+        let gen = || rand::thread_rng().gen_range(1..15);
         let random_square = move || SQUARE * gen() as f32;
         
-        let object_generator = move || {
-            let x0 = random_square();
-            let y0 = random_square();
-            Object{ rect: Rect{min: Pos2{ x: x0, y: y0}, max: Pos2{x: x0 + random_square(), y: y0 + random_square()} }, color: Color32::RED}
-        };
+        let object_generator = || {
+            let mut set: Vec<Object> = vec![
+                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 2.0, y: SQUARE * 2.0} }, color: Color32::GREEN}, //Plant
+                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 4.0, y: SQUARE * 4.0} }, color: Color32::RED}, //Chair
+                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE, y: SQUARE * 4.0} }, color: Color32::BLACK}, //TV
+                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 4.0, y: SQUARE * 2.0} }, color: Color32::BLUE}, //Sofa
+                ];
+    
+            let mut objects:Vec<Object> = Vec::new();
+            let mut thread_rng = rand::thread_rng();
+            let mut objects_range = thread_rng.gen_range(2..5);
 
-        let non_overlapping_generator = || {
-            let mut objects: Vec<Object> = vec![];
-            let len = objects.len();
-            while len < 10 {
-                let object = object_generator();
-                for x in objects {
-                    if x.rect.contains_rect(object.rect){
+            for y in 4..WIDTH_AND_HEIGHT-4 {
+                for x in 4..WIDTH_AND_HEIGHT-4 {
+                    if objects_range == 0 {
                         break;
+                    }
+                    if objects.iter().any(|object| object.rect.contains(Pos2{x: x as f32 * SQUARE,y: y as f32 * SQUARE})) {
+                        continue;
+                    }
+                    if rand::random() {
+                        todo!();
                     }
                 }
             }
+            objects
         };
 
         Self{
-            objects: (0..10).into_iter().map(|_| object_generator()).collect(),
+            objects: object_generator(),
             ..Self::default()
         }
     }

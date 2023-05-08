@@ -12,12 +12,12 @@ fn main() {
 
     use egui::Vec2;
 
-    use crate::app::SQUARE;
+    use crate::app::{SQUARE, WIDTH_AND_HEIGHT};
     tracing_subscriber::fmt::init();
     info!("starting up");
     let window_size = Some( Vec2{
-        x: SQUARE*32.0,
-        y: SQUARE*32.0,
+        x: SQUARE*WIDTH_AND_HEIGHT as f32,
+        y: SQUARE*WIDTH_AND_HEIGHT as f32,
     });
     let native_options = eframe::NativeOptions{
         min_window_size: window_size,

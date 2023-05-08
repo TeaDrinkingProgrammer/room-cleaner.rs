@@ -14,7 +14,7 @@ impl Default for Robot {
         Self {
             rect: Rect {
                 min: Pos2::new(0.0, 0.0),
-                max: Pos2::new(PIXEL, PIXEL),
+                max: Pos2::new(PIXEL * 3.0, PIXEL * 3.0),
             },
             color: Color32::GOLD,
         }
@@ -80,14 +80,14 @@ fn grid(ui: &Ui, width: f32, height: f32) {
         let x = i as f32;
         ui.painter().line_segment(
             [Pos2::new(x, 0.0), Pos2::new(x, height)],
-            Stroke::new(1.0, Color32::BLACK),
+            Stroke::new(1.0, Color32::from_gray(200)),
         );
     }
     for i in (0..height as u32).step_by(PIXEL as usize) {
         let y = i as f32;
         ui.painter().line_segment(
             [Pos2::new(0.0, y), Pos2::new(width, y)],
-            Stroke::new(1.0, Color32::BLACK),
+            Stroke::new(1.0, Color32::from_gray(200)),
         );
     }
 }

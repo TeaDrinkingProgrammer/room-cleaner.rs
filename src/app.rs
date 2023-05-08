@@ -1,12 +1,7 @@
-use std::f32::consts::PI;
-
-use egui::{Color32, FontFamily, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Vec2};
-use rand::{Rng, thread_rng, distributions::uniform::SampleUniform};
+use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2};
 use serde::Serialize;
-use tracing_subscriber::field::debug;
 
 pub static SQUARE: f32 = 12.5;
-
 
 #[derive(Serialize, Debug)]
 struct Object {
@@ -19,32 +14,36 @@ impl Default for Object {
         Self {
             rect: Rect {
                 min: Pos2::new(0.0, 0.0),
-                max: Pos2::new(SQUARE, SQUARE),
+                max: Pos2::new(SQUARE * 3.0, SQUARE * 3.0),
             },
-            color: Color32::GOLD,
+            color: Color32::from_rgb(255, 190, 0),
         }
     }
 }
 
 impl Object {
-    fn move_pos(&mut self, ctx: &egui::Context, painter: &Painter, x: f32, y: f32) {
+    fn move_pos(&mut self, screen: Rect, x: f32, y: f32) {
         let translation = Vec2 { x, y };
-        self.rect = self.rect.translate(translation);
-        if !in_bounds_check(ctx, self.rect) {
-            println!("out of bounds");
+        let moved_obj = self.rect.translate(translation);
+        if in_bounds_check(screen, moved_obj) {
+            self.rect = moved_obj;
+        } else {
+            info!("out of bounds");
         }
-        painter.rect(self.rect, 0.0, Color32::GOLD, Stroke::NONE);
     }
 }
 
-fn in_bounds_check(ctx: &egui::Context, rect: Rect) -> bool{
-    ctx.available_rect().contains_rect(rect)
+fn in_bounds_check(screen: Rect, rect: Rect) -> bool {
+    screen.contains_rect(rect)
+    // ctx.screen_rect().contains_rect(rect)
+    // ctx.available_rect().contains_rect(rect)
+    // true
 }
 
 #[derive(Default, Serialize)]
 pub(crate) struct App {
     robot: Object,
-    objects: Vec<Object>
+    objects: Vec<Object>,
 }
 
 impl App {
@@ -53,36 +52,26 @@ impl App {
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
-        let rec = Object{ rect: Rect{min: Pos2{ x: SQUARE * 7.0, y: SQUARE * 7.0}, max: Pos2{x: SQUARE * 10.0, y: SQUARE * 10.0} },
-            color: Color32::RED};
-        let objects = vec![vec![rec]];
+        Self::default()
+    }
 
-        let gen = move || rand::thread_rng().gen_range(1..15);
-        let random_square = move || SQUARE * gen() as f32;
-        
-        let object_generator = move || {
-            let x0 = random_square();
-            let y0 = random_square();
-            Object{ rect: Rect{min: Pos2{ x: x0, y: y0}, max: Pos2{x: x0 + random_square(), y: y0 + random_square()} }, color: Color32::RED}
-        };
-
-        let non_overlapping_generator = || {
-            let mut objects: Vec<Object> = vec![];
-            let len = objects.len();
-            while len < 10 {
-                let object = object_generator();
-                for x in objects {
-                    if x.rect.contains_rect(object.rect){
-                        break;
-                    }
-                }
+    fn keyboard_input(&mut self, ui: &Ui) {
+        let screen = ui.ctx().available_rect();
+        ui.input_mut(|i| {
+            if i.key_pressed(Key::ArrowLeft) {
+                info!("Moving keyboard Left");
+                self.robot.move_pos(screen, -SQUARE, 0.0);
+            } else if i.key_pressed(Key::ArrowRight) {
+                info!("Moving keyboard Right");
+                self.robot.move_pos(screen, SQUARE, 0.0);
+            } else if i.key_pressed(Key::ArrowDown) {
+                info!("Moving keyboard Down");
+                self.robot.move_pos(screen, 0.0, SQUARE);
+            } else if i.key_pressed(Key::ArrowUp) {
+                info!("Moving keyboard Up");
+                self.robot.move_pos(screen, 0.0, -SQUARE);
             }
-        };
-
-        Self{
-            objects: (0..10).into_iter().map(|_| object_generator()).collect(),
-            ..Self::default()
-        }
+        });
     }
 }
 
@@ -95,15 +84,33 @@ impl eframe::App for App {
         ctx.set_visuals(egui::Visuals::light());
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let painter = ui.painter();
-            for object in self.objects.iter() {
-                print!("{:#?}", object);
-                painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
-            }
-            ctx.request_repaint();
-            // painter.rect(Rect{ min: Pos2{ x: SQUARE * 7.0, y: SQUARE * 7.0}, max: Pos2{x: SQUARE * 10.0, y: SQUARE * 10.0} }, 0.0, Color32::RED, Stroke::NONE);
-            self.robot.move_pos(ctx, painter, SQUARE, 0.0);
-            std::thread::sleep(std::time::Duration::from_millis(600));
+            // for object in self.objects.iter() {
+            //     print!("{:#?}", object);
+            //     let painter = ui.painter();
+            //     painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
+            // }
+            self.keyboard_input(ui);
+            ui.painter()
+                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+            grid(ui, 800.0, 600.0);
         });
+        // ctx.request_repaint();
+    }
+}
+
+fn grid(ui: &Ui, width: f32, height: f32) {
+    for i in (0..width as u32).step_by(SQUARE as usize) {
+        let x = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(x, 0.0), Pos2::new(x, height)],
+            Stroke::new(1.0, Color32::from_gray(200)),
+        );
+    }
+    for i in (0..height as u32).step_by(SQUARE as usize) {
+        let y = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(0.0, y), Pos2::new(width, y)],
+            Stroke::new(1.0, Color32::from_gray(200)),
+        );
     }
 }

@@ -70,7 +70,6 @@ impl eframe::App for App {
             self.keyboard_input(ui);
             ui.painter()
                 .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
-            // ctx.request_repaint();
         });
     }
 }

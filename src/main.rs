@@ -9,9 +9,22 @@ use app::App;
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
+
+    use egui::Vec2;
+
+    use crate::app::SQUARE;
     tracing_subscriber::fmt::init();
     info!("starting up");
-    let native_options = eframe::NativeOptions::default();
+    let window_size = Some( Vec2{
+        x: SQUARE*32.0,
+        y: SQUARE*32.0,
+    });
+    let native_options = eframe::NativeOptions{
+        min_window_size: window_size,
+        max_window_size: window_size,
+        resizable: false,
+        ..eframe::NativeOptions::default()
+    };
     match eframe::run_native(
         "eframe template",
         native_options,

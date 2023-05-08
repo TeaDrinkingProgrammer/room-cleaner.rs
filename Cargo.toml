@@ -12,3 +12,4 @@ log = "0.4.17"
 # env_logger = "0.10.0"
 tracing-subscriber = "0.3"
 serde = { version = "1", features = ["derive"] }
+rand = "0.8.5"

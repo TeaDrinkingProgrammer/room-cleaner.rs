@@ -16,7 +16,7 @@ impl Default for Robot {
                 min: Pos2::new(0.0, 0.0),
                 max: Pos2::new(PIXEL * 3.0, PIXEL * 3.0),
             },
-            color: Color32::GOLD,
+            color: Color32::from_rgb(255, 190, 0),
         }
     }
 }

@@ -1,8 +1,40 @@
-use egui::{Color32, FontFamily, RichText, ScrollArea, Vec2};
+use std::f32::consts::PI;
+
+use egui::{Color32, FontFamily, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Vec2};
 use serde::Serialize;
 
+pub static PIXEL: f32 = 25.0;
+
+#[derive(Serialize)]
+struct Robot {
+    rect: Rect,
+    color: Color32,
+}
+
+impl Default for Robot {
+    fn default() -> Self {
+        Self {
+            rect: Rect {
+                min: Pos2::new(0.0, 0.0),
+                max: Pos2::new(PIXEL, PIXEL),
+            },
+            color: Color32::GOLD,
+        }
+    }
+}
+
+impl Robot {
+    fn move_pos(&mut self, painter: &Painter, x: f32, y: f32) {
+        let translation = Vec2 { x, y };
+        self.rect = self.rect.translate(translation);
+        painter.rect(self.rect, 0.0, Color32::GOLD, Stroke::NONE);
+    }
+}
+
 #[derive(Default, Serialize)]
-pub(crate) struct App {}
+pub(crate) struct App {
+    robot: Robot,
+}
 
 impl App {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
@@ -20,33 +52,13 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // ctx.set_visuals(egui::Visuals::dark());
+        ctx.set_visuals(egui::Visuals::light());
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            // egui::menu::bar(ui, |ui| {
-            //     if ui.button("Save").clicked() {
-            //         self.service.request(Method::SaveAll);
-            //     };
-            // });
-        });
         egui::CentralPanel::default().show(ctx, |ui| {
-            let tl = ui.ctx().available_rect().left_top().to_vec2();
-            let br = ui.ctx().available_rect().right_bottom().to_vec2();
-            let width = br.x - tl.x;
-            let height = br.y - tl.y;
-
-            let window = egui::Window::new("Canvas")
-                .default_width(width)
-                .default_height(height)
-                .collapsible(false)
-                .title_bar(false)
-                .vscroll(false)
-                .resizable(false)
-                .fixed_pos(tl.to_pos2());
-            window.show(ctx, |ui| {
-                ctx.request_repaint();
-            });
+            ctx.request_repaint();
+            let painter = ui.painter();
+            self.robot.move_pos(painter, PIXEL, 0.0);
+            std::thread::sleep(std::time::Duration::from_millis(600));
         });
     }
 }

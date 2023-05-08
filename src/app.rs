@@ -70,6 +70,24 @@ impl eframe::App for App {
             self.keyboard_input(ui);
             ui.painter()
                 .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+            grid(ui, 800.0, 600.0);
         });
+    }
+}
+
+fn grid(ui: &Ui, width: f32, height: f32) {
+    for i in (0..width as u32).step_by(PIXEL as usize) {
+        let x = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(x, 0.0), Pos2::new(x, height)],
+            Stroke::new(1.0, Color32::BLACK),
+        );
+    }
+    for i in (0..height as u32).step_by(PIXEL as usize) {
+        let y = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(0.0, y), Pos2::new(width, y)],
+            Stroke::new(1.0, Color32::BLACK),
+        );
     }
 }

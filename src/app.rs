@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use egui::{Color32, FontFamily, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Vec2};
+use egui::{Color32, FontFamily, Key, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Ui, Vec2};
 use serde::Serialize;
 
 pub static PIXEL: f32 = 25.0;
@@ -24,10 +22,9 @@ impl Default for Robot {
 }
 
 impl Robot {
-    fn move_pos(&mut self, painter: &Painter, x: f32, y: f32) {
+    fn move_pos(&mut self, x: f32, y: f32) {
         let translation = Vec2 { x, y };
         self.rect = self.rect.translate(translation);
-        painter.rect(self.rect, 0.0, Color32::GOLD, Stroke::NONE);
     }
 }
 
@@ -44,6 +41,21 @@ impl App {
         // for e.g. egui::PaintCallback.
         Self::default()
     }
+
+    fn keyboard_input(&mut self, ui: &Ui) {
+        ui.input_mut(|i| {
+            if i.key_pressed(Key::ArrowLeft) {
+                self.robot.move_pos(-PIXEL, 0.0);
+            } else if i.key_pressed(Key::ArrowRight) {
+                info!("Moving cleaner");
+                self.robot.move_pos(PIXEL, 0.0);
+            } else if i.key_pressed(Key::ArrowDown) {
+                self.robot.move_pos(0.0, PIXEL);
+            } else if i.key_pressed(Key::ArrowUp) {
+                self.robot.move_pos(0.0, -PIXEL);
+            }
+        });
+    }
 }
 
 impl eframe::App for App {
@@ -55,10 +67,10 @@ impl eframe::App for App {
         ctx.set_visuals(egui::Visuals::light());
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ctx.request_repaint();
-            let painter = ui.painter();
-            self.robot.move_pos(painter, PIXEL, 0.0);
-            std::thread::sleep(std::time::Duration::from_millis(600));
+            self.keyboard_input(ui);
+            ui.painter()
+                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+            // ctx.request_repaint();
         });
     }
 }

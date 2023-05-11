@@ -16,7 +16,7 @@ impl Default for Object {
         Self {
             rect: Rect {
                 min: Pos2::new(SQUARE * 1.0, SQUARE * 1.0),
-                max: Pos2::new(SQUARE * 3.0, SQUARE * 3.0),
+                max: Pos2::new(SQUARE * 2.0, SQUARE * 2.0),
             },
             color: Color32::from_rgb(255, 190, 0),
         }
@@ -45,24 +45,55 @@ impl Object {
 pub(crate) struct App {
     robot: Object,
     objects: Vec<Object>,
+    todo: u16,
 }
 
 impl App {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
         let left_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: SQUARE, y: 25.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 { x: 0.0, y: 0.0 },
+                max: Pos2 {
+                    x: SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let right_wall = Object {
-            rect: Rect { min: Pos2 { x: 31.0 * SQUARE, y: 0.0}, max: Pos2 { x: 32.0 * SQUARE, y: 25.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 {
+                    x: 31.0 * SQUARE,
+                    y: 0.0,
+                },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let upper_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: 32.0 * SQUARE, y: SQUARE } },
+            rect: Rect {
+                min: Pos2 { x: 0.0, y: 0.0 },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let lower_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 23.0 * SQUARE }, max: Pos2 { x: 32.0 * SQUARE, y: 24.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 {
+                    x: 0.0,
+                    y: 23.0 * SQUARE,
+                },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let mut objects = generate_objects();
@@ -70,9 +101,32 @@ impl App {
         objects.push(right_wall);
         objects.push(upper_wall);
         objects.push(lower_wall);
+        let mut todo = 0;
+
+        for x in 1..31 {
+            for y in 1..23 {
+                let rect = Rect {
+                    min: Pos2 {
+                        x: x as f32 * SQUARE,
+                        y: y as f32 * SQUARE,
+                    },
+                    max: Pos2 {
+                        x: (x + 1) as f32 * SQUARE,
+                        y: (y + 1) as f32 * SQUARE,
+                    },
+                };
+                if objects.iter().any(|obj| obj.rect.contains(rect.center())) {
+                    info!("Object at {x}/{y}");
+                } else {
+                    todo += 1;
+                }
+            }
+        }
+        info!("TODO: {}", todo);
 
         Self {
             objects,
+            todo,
             ..Self::default()
         }
     }
@@ -112,6 +166,7 @@ impl eframe::App for App {
             ui.painter()
                 .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
             grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+            ui.colored_label(Color32::WHITE, format!("0/{}", self.todo))
         });
         ctx.request_repaint();
     }

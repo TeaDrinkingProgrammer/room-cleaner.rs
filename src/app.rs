@@ -1,9 +1,10 @@
-use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2};
+use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2, epaint::PathShape};
 use rand::Rng;
 use serde::Serialize;
 
 pub static SQUARE: f32 = 25.0;
 pub static WIDTH_AND_HEIGHT: f32 = 50.0;
+
 
 #[derive(Serialize, Debug, Clone)]
 struct Object {
@@ -13,18 +14,20 @@ struct Object {
 
 impl Default for Object {
     fn default() -> Self {
+        let rect = Rect {
+            min: Pos2::new(SQUARE * 1.0, SQUARE * 1.0),
+            max: Pos2::new(SQUARE * 2.0, SQUARE * 2.0), 
+        };
         Self {
-            rect: Rect {
-                min: Pos2::new(SQUARE * 1.0, SQUARE * 1.0),
-                max: Pos2::new(SQUARE * 3.0, SQUARE * 3.0),
-            },
+            rect,
             color: Color32::from_rgb(255, 190, 0),
         }
     }
 }
 
+
 impl Object {
-    fn move_pos(&mut self, collision_rects: &Vec<Object>, x: f32, y: f32) {
+    fn move_pos(&mut self, collision_rects: &Vec<Object>, x: f32, y: f32) -> Option<Rect> {
         let translation = Vec2 { x, y };
         let moved_obj = self.rect.translate(translation);
         if collision_rects.iter().all(|obj: &Object| {
@@ -36,7 +39,11 @@ impl Object {
                 true
             }
         }) {
+            let pre_moved = self.rect;
             self.rect = moved_obj;
+            Some(pre_moved)
+        } else {
+            None
         }
     }
 }
@@ -44,6 +51,8 @@ impl Object {
 #[derive(Default, Serialize)]
 pub(crate) struct App {
     robot: Object,
+    path: Vec<Pos2>,
+    cleaned: Vec<Object>,
     objects: Vec<Object>,
 }
 
@@ -73,6 +82,8 @@ impl App {
 
         Self {
             objects,
+            path: Vec::new(),
+            cleaned: Vec::new(),
             ..Self::default()
         }
     }
@@ -81,18 +92,34 @@ impl App {
         ui.input_mut(|i| {
             if i.key_pressed(Key::ArrowLeft) {
                 info!("Moving keyboard Left");
-                self.robot.move_pos(&self.objects, -SQUARE, 0.0);
+                self.move_robot( -SQUARE, 0.0);
             } else if i.key_pressed(Key::ArrowRight) {
                 info!("Moving keyboard Right");
-                self.robot.move_pos(&self.objects, SQUARE, 0.0);
+                self.move_robot(SQUARE, 0.0);
             } else if i.key_pressed(Key::ArrowDown) {
                 info!("Moving keyboard Down");
-                self.robot.move_pos(&self.objects, 0.0, SQUARE);
+                self.move_robot(0.0, SQUARE);
             } else if i.key_pressed(Key::ArrowUp) {
                 info!("Moving keyboard Up");
-                self.robot.move_pos(&self.objects, 0.0, -SQUARE);
+                self.move_robot(0.0, -SQUARE);
             }
         });
+    }
+    fn move_robot(&mut self, x: f32, y: f32) {
+        let moved = self.robot.move_pos(&self.objects, x, y);
+        match moved {
+            Some(moved) => {
+                self.path.push(moved.center());
+                if self.cleaned.iter().all(|obj| !obj.rect.intersects(moved)) {
+                    self.cleaned.push(Object {
+                        rect: moved,
+                        color: Color32::GOLD
+                    });
+                }
+            }
+            None => ()
+        }
+
     }
 }
 
@@ -108,6 +135,12 @@ impl eframe::App for App {
                 let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
+            for object in self.cleaned.iter() {
+                let painter = ui.painter();
+                painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
+            }
+            let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
+            ui.painter().add(path);
             self.keyboard_input(ui);
             ui.painter()
                 .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);

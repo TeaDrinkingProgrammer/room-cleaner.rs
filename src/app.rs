@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2, epaint::PathShape};
 use rand::Rng;
 use serde::Serialize;
@@ -54,24 +55,55 @@ pub(crate) struct App {
     path: Vec<Pos2>,
     cleaned: Vec<Object>,
     objects: Vec<Object>,
+    todo: u16,
+    move_count: usize,
 }
-
 impl App {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
         let left_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: SQUARE, y: 25.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 { x: 0.0, y: 0.0 },
+                max: Pos2 {
+                    x: SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let right_wall = Object {
-            rect: Rect { min: Pos2 { x: 31.0 * SQUARE, y: 0.0}, max: Pos2 { x: 32.0 * SQUARE, y: 25.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 {
+                    x: 31.0 * SQUARE,
+                    y: 0.0,
+                },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let upper_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: 32.0 * SQUARE, y: SQUARE } },
+            rect: Rect {
+                min: Pos2 { x: 0.0, y: 0.0 },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let lower_wall = Object {
-            rect: Rect { min: Pos2 { x: 0.0, y: 23.0 * SQUARE }, max: Pos2 { x: 32.0 * SQUARE, y: 24.0 * SQUARE } },
+            rect: Rect {
+                min: Pos2 {
+                    x: 0.0,
+                    y: 23.0 * SQUARE,
+                },
+                max: Pos2 {
+                    x: 32.0 * SQUARE,
+                    y: 24.0 * SQUARE,
+                },
+            },
             color: Color32::BLACK,
         };
         let mut objects = generate_objects();
@@ -79,11 +111,35 @@ impl App {
         objects.push(right_wall);
         objects.push(upper_wall);
         objects.push(lower_wall);
+        let mut todo = 0;
+
+        for x in 1..31 {
+            for y in 1..23 {
+                let rect = Rect {
+                    min: Pos2 {
+                        x: x as f32 * SQUARE,
+                        y: y as f32 * SQUARE,
+                    },
+                    max: Pos2 {
+                        x: (x + 1) as f32 * SQUARE,
+                        y: (y + 1) as f32 * SQUARE,
+                    },
+                };
+                if objects.iter().any(|obj| obj.rect.contains(rect.center())) {
+                    info!("Object at {x}/{y}");
+                } else {
+                    todo += 1;
+                }
+            }
+        }
+        info!("TODO: {}", todo);
 
         Self {
             objects,
+            todo,
             path: Vec::new(),
             cleaned: Vec::new(),
+            move_count: 0,
             ..Self::default()
         }
     }
@@ -109,8 +165,10 @@ impl App {
         let moved = self.robot.move_pos(&self.objects, x, y);
         match moved {
             Some(moved) => {
+                self.move_count += 1;
                 self.path.push(moved.center());
-                if self.cleaned.iter().all(|obj| !obj.rect.intersects(moved)) {
+                if self.cleaned.iter().all(|obj| obj.rect != moved) {
+                    info!("Cleaned {:?}", moved);
                     self.cleaned.push(Object {
                         rect: moved,
                         color: Color32::GOLD
@@ -145,6 +203,7 @@ impl eframe::App for App {
             ui.painter()
                 .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
             grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+            ui.colored_label(Color32::WHITE, format!("{}/{}  moved: {}",self.cleaned.len()+1, self.todo, self.move_count));
         });
         ctx.request_repaint();
     }

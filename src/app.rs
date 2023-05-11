@@ -1,13 +1,9 @@
-use std::f32::consts::PI;
-
-use egui::{Color32, FontFamily, Painter, Pos2, Rect, RichText, ScrollArea, Stroke, Vec2};
-use rand::{Rng, thread_rng, distributions::uniform::SampleUniform, seq::SliceRandom, rngs::ThreadRng};
+use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2};
+use rand::Rng;
 use serde::Serialize;
-use tracing_subscriber::field::debug;
 
-pub static SQUARE: f32 = 12.5;
-pub static WIDTH_AND_HEIGHT: u8 = 25;
-
+pub static SQUARE: f32 = 25.0;
+pub static WIDTH_AND_HEIGHT: f32 = 50.0;
 
 #[derive(Serialize, Debug, Clone)]
 struct Object {
@@ -19,77 +15,84 @@ impl Default for Object {
     fn default() -> Self {
         Self {
             rect: Rect {
-                min: Pos2::new(0.0, 0.0),
-                max: Pos2::new(SQUARE, SQUARE),
+                min: Pos2::new(SQUARE * 1.0, SQUARE * 1.0),
+                max: Pos2::new(SQUARE * 3.0, SQUARE * 3.0),
             },
-            color: Color32::GOLD,
+            color: Color32::from_rgb(255, 190, 0),
         }
     }
 }
 
 impl Object {
-    fn move_pos(&mut self, ctx: &egui::Context, painter: &Painter, x: f32, y: f32) {
+    fn move_pos(&mut self, collision_rects: &Vec<Object>, x: f32, y: f32) {
         let translation = Vec2 { x, y };
-        self.rect = self.rect.translate(translation);
-        if !in_bounds_check(ctx, self.rect) {
-            println!("out of bounds");
+        let moved_obj = self.rect.translate(translation);
+        if collision_rects.iter().all(|obj: &Object| {
+            let rect = obj.rect.expand2(Vec2 { x: -0.1, y: -0.1 });
+            if rect.intersects(moved_obj) {
+                info!("Collision detected, {:?}", obj.color);
+                false
+            } else {
+                true
+            }
+        }) {
+            self.rect = moved_obj;
         }
-        painter.rect(self.rect, 0.0, Color32::GOLD, Stroke::NONE);
     }
-}
-
-fn in_bounds_check(ctx: &egui::Context, rect: Rect) -> bool{
-    ctx.available_rect().contains_rect(rect)
 }
 
 #[derive(Default, Serialize)]
 pub(crate) struct App {
     robot: Object,
-    objects: Vec<Object>
+    objects: Vec<Object>,
 }
 
 impl App {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
-
-        let gen = || rand::thread_rng().gen_range(1..15);
-        let random_square = move || SQUARE * gen() as f32;
-        
-        let object_generator = || {
-            let mut set: Vec<Object> = vec![
-                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 2.0, y: SQUARE * 2.0} }, color: Color32::GREEN}, //Plant
-                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 4.0, y: SQUARE * 4.0} }, color: Color32::RED}, //Chair
-                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE, y: SQUARE * 4.0} }, color: Color32::BLACK}, //TV
-                Object{ rect: Rect{min: Pos2{ x: 0.0, y: 0.0}, max: Pos2{x: SQUARE * 4.0, y: SQUARE * 2.0} }, color: Color32::BLUE}, //Sofa
-                ];
-    
-            let mut objects:Vec<Object> = Vec::new();
-            let mut thread_rng = rand::thread_rng();
-            let mut objects_range = thread_rng.gen_range(2..5);
-
-            for y in 4..WIDTH_AND_HEIGHT-4 {
-                for x in 4..WIDTH_AND_HEIGHT-4 {
-                    if objects_range == 0 {
-                        break;
-                    }
-                    if objects.iter().any(|object| object.rect.contains(Pos2{x: x as f32 * SQUARE,y: y as f32 * SQUARE})) {
-                        continue;
-                    }
-                    if rand::random() {
-                        todo!();
-                    }
-                }
-            }
-            objects
+        let left_wall = Object {
+            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: SQUARE, y: 25.0 * SQUARE } },
+            color: Color32::BLACK,
         };
+        let right_wall = Object {
+            rect: Rect { min: Pos2 { x: 31.0 * SQUARE, y: 0.0}, max: Pos2 { x: 32.0 * SQUARE, y: 25.0 * SQUARE } },
+            color: Color32::BLACK,
+        };
+        let upper_wall = Object {
+            rect: Rect { min: Pos2 { x: 0.0, y: 0.0 }, max: Pos2 { x: 32.0 * SQUARE, y: SQUARE } },
+            color: Color32::BLACK,
+        };
+        let lower_wall = Object {
+            rect: Rect { min: Pos2 { x: 0.0, y: 23.0 * SQUARE }, max: Pos2 { x: 32.0 * SQUARE, y: 24.0 * SQUARE } },
+            color: Color32::BLACK,
+        };
+        let mut objects = generate_objects();
+        objects.push(left_wall);
+        objects.push(right_wall);
+        objects.push(upper_wall);
+        objects.push(lower_wall);
 
-        Self{
-            objects: object_generator(),
+        Self {
+            objects,
             ..Self::default()
         }
+    }
+
+    fn keyboard_input(&mut self, ui: &Ui) {
+        ui.input_mut(|i| {
+            if i.key_pressed(Key::ArrowLeft) {
+                info!("Moving keyboard Left");
+                self.robot.move_pos(&self.objects, -SQUARE, 0.0);
+            } else if i.key_pressed(Key::ArrowRight) {
+                info!("Moving keyboard Right");
+                self.robot.move_pos(&self.objects, SQUARE, 0.0);
+            } else if i.key_pressed(Key::ArrowDown) {
+                info!("Moving keyboard Down");
+                self.robot.move_pos(&self.objects, 0.0, SQUARE);
+            } else if i.key_pressed(Key::ArrowUp) {
+                info!("Moving keyboard Up");
+                self.robot.move_pos(&self.objects, 0.0, -SQUARE);
+            }
+        });
     }
 }
 
@@ -100,17 +103,87 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::light());
-
         egui::CentralPanel::default().show(ctx, |ui| {
-            let painter = ui.painter();
             for object in self.objects.iter() {
-                print!("{:#?}", object);
+                let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
-            ctx.request_repaint();
-            // painter.rect(Rect{ min: Pos2{ x: SQUARE * 7.0, y: SQUARE * 7.0}, max: Pos2{x: SQUARE * 10.0, y: SQUARE * 10.0} }, 0.0, Color32::RED, Stroke::NONE);
-            self.robot.move_pos(ctx, painter, SQUARE, 0.0);
-            std::thread::sleep(std::time::Duration::from_millis(600));
+            self.keyboard_input(ui);
+            ui.painter()
+                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+            grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
         });
+        ctx.request_repaint();
     }
+}
+
+fn grid(ui: &Ui, width: f32, height: f32) {
+    for i in (0..width as u32).step_by(SQUARE as usize) {
+        let x = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(x, 0.0), Pos2::new(x, height)],
+            Stroke::new(1.0, Color32::from_gray(200)),
+        );
+    }
+    for i in (0..height as u32).step_by(SQUARE as usize) {
+        let y = i as f32;
+        ui.painter().line_segment(
+            [Pos2::new(0.0, y), Pos2::new(width, y)],
+            Stroke::new(1.0, Color32::from_gray(200)),
+        );
+    }
+}
+
+fn generate_objects() -> Vec<Object> {
+    let mut rng = rand::thread_rng();
+    let mut num_objects = rng.gen_range(3..=6);
+    let mut objects = Vec::new();
+    let height = 24;
+    let width = 31;
+    for x in 3..width - 4 {
+        for y in 3..height - 3 {
+            let place = rng.gen_range(0..=100);
+            let rect = Rect {
+                min: Pos2::new(x as f32 * SQUARE, y as f32 * SQUARE),
+                max: Pos2::new(
+                    (x as f32 + rng.gen_range(4..=16) as f32) * SQUARE,
+                    (y as f32 + rng.gen_range(4..=16) as f32) * SQUARE,
+                ),
+            };
+            let rect_exp = rect.expand2(Vec2 {
+                x: 2.0 * SQUARE,
+                y: 2.0 * SQUARE,
+            });
+            if place >= 40
+                && objects
+                    .iter()
+                    .all(|obj: &Object| !obj.rect.intersects(rect_exp))
+            {
+                objects.push(Object {
+                    rect,
+                    color: rand_color(),
+                });
+                num_objects -= 1;
+                if num_objects == 0 {
+                    return objects;
+                }
+            }
+        }
+    }
+    objects
+}
+
+fn rand_color() -> Color32 {
+    let mut rng = rand::thread_rng();
+    let random = rng.gen_range(0..=6);
+    let colors = vec![
+        Color32::BLUE,
+        Color32::RED,
+        Color32::GREEN,
+        Color32::YELLOW,
+        Color32::LIGHT_RED,
+        Color32::DARK_BLUE,
+        Color32::KHAKI,
+    ];
+    colors[random]
 }

@@ -16,8 +16,8 @@ fn main() {
     tracing_subscriber::fmt::init();
     info!("starting up");
     let window_size = Some(Vec2 {
-        x: SQUARE * WIDTH_AND_HEIGHT as f32,
-        y: SQUARE * WIDTH_AND_HEIGHT as f32,
+        x: SQUARE * WIDTH_AND_HEIGHT,
+        y: SQUARE * WIDTH_AND_HEIGHT,
     });
     let native_options = eframe::NativeOptions {
         min_window_size: window_size,

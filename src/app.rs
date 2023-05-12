@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::{HashSet, VecDeque}, time::Duration};
 use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2, epaint::PathShape};
 use rand::Rng;
 use serde::Serialize;
@@ -47,6 +47,14 @@ impl Object {
             None
         }
     }
+}
+
+
+#[derive(PartialEq, Eq)]
+enum Visited {
+    Visited,
+    NotVisited,
+    OutOfBounds
 }
 
 #[derive(Default, Serialize)]
@@ -144,7 +152,7 @@ impl App {
         }
     }
 
-    fn keyboard_input(&mut self, ui: &Ui) {
+    fn keyboard_input(&mut self,ctx: &egui::Context, ui: &mut Ui) {
         ui.input_mut(|i| {
             if i.key_pressed(Key::ArrowLeft) {
                 info!("Moving keyboard Left");
@@ -160,8 +168,9 @@ impl App {
                 self.move_robot(0.0, -SQUARE);
             }
         });
+        self.draw(ctx, ui);
     }
-    fn move_robot(&mut self, x: f32, y: f32) {
+    fn move_robot(&mut self, x: f32, y: f32) -> Visited {
         let moved = self.robot.move_pos(&self.objects, x, y);
         match moved {
             Some(moved) => {
@@ -173,11 +182,33 @@ impl App {
                         rect: moved,
                         color: Color32::GOLD
                     });
+                    return Visited::Visited
+                }
+                Visited::NotVisited
+            }
+            None => Visited::OutOfBounds
+        }
+    }
+    fn draw(&self, ctx: &egui::Context, ui: &mut Ui) {
+        let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
+        ui.painter().add(path);
+        ui.painter()
+                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+                grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+                ui.colored_label(Color32::WHITE, format!("{}/{}  moved: {}",self.cleaned.len()+1, self.todo, self.move_count));
+        ctx.request_repaint();
+    }
+    fn dfs(&mut self, x: f32, y: f32, ctx: &egui::Context, ui: &mut Ui){
+        
+        std::thread::sleep(Duration::from_millis(2000));
+        if self.move_robot(x, y) == Visited::NotVisited {
+            for x in -1..1 {
+                for y in -1..1 {
+                    self.draw(ctx, ui);
+                    self.dfs(x as f32, y as f32,ctx, ui);
                 }
             }
-            None => ()
         }
-
     }
 }
 
@@ -197,16 +228,19 @@ impl eframe::App for App {
                 let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
-            let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
-            ui.painter().add(path);
-            self.keyboard_input(ui);
-            ui.painter()
-                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
-            grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
-            ui.colored_label(Color32::WHITE, format!("{}/{}  moved: {}",self.cleaned.len()+1, self.todo, self.move_count));
+            // self.keyboard_input(ctx, ui);
+            // let mut painter = || {
+            //     ui.painter()
+            //     .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+            //     grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+            //     ui.colored_label(Color32::WHITE, format!("{}/{}  moved: {}",self.cleaned.len()+1, self.todo, self.move_count));
+            //     ctx.request_repaint();
+            // };
+            self.dfs(0.0, 0.0, ctx, ui);
         });
-        ctx.request_repaint();
+        
     }
+    
 }
 
 fn grid(ui: &Ui, width: f32, height: f32) {
@@ -263,6 +297,14 @@ fn generate_objects() -> Vec<Object> {
         }
     }
     objects
+}
+
+fn probe(objects: &Vec<Object>, x: f32, y: f32) -> bool {
+    let probe = Rect {
+        min: Pos2::new(x, y),
+        max: Pos2::new(x + SQUARE, y + SQUARE),
+    };
+    objects.iter().any(|obj| obj.rect.intersects(probe))
 }
 
 fn rand_color() -> Color32 {

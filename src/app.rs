@@ -1,4 +1,4 @@
-use egui::{epaint::PathShape, Color32, Key, Pos2, Rect, Stroke, Ui, Vec2};
+use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2, epaint::PathShape};
 use rand::Rng;
 use serde::Serialize;
 
@@ -26,7 +26,7 @@ impl Default for Object {
     fn default() -> Self {
         let rect = Rect {
             min: Pos2::new(SQUARE * 1.0, SQUARE * 1.0),
-            max: Pos2::new(SQUARE * 2.0, SQUARE * 2.0),
+            max: Pos2::new(SQUARE * 2.0, SQUARE * 2.0), 
         };
         Self {
             rect,
@@ -34,6 +34,7 @@ impl Default for Object {
         }
     }
 }
+
 
 impl Object {
     pub fn new(collision_rects: &[Object]) -> Self {
@@ -64,7 +65,7 @@ impl Object {
         let translation = Vec2 { x, y };
         let moved_obj = self.rect.translate(translation);
         if collision_rects.iter().all(|obj: &Object| {
-            let rect = obj.rect.expand2(Vec2 { x: -0.1, y: -0.1 });
+            let rect = obj.rect.shrink2(Vec2 { x: 0.1, y: 0.1 });
             if rect.intersects(moved_obj) {
                 info!("Collision detected, {:?}", obj.color);
                 false
@@ -79,6 +80,14 @@ impl Object {
             None
         }
     }
+}
+
+
+#[derive(PartialEq, Eq)]
+enum Visited {
+    Visited,
+    NotVisited,
+    OutOfBounds
 }
 
 #[derive(Default, Serialize)]
@@ -198,7 +207,7 @@ impl App {
         }
     }
 
-    fn keyboard_input(&mut self, ui: &Ui) {
+    fn keyboard_input(&mut self,ui: &mut Ui) {
         ui.input_mut(|i| {
             if i.key_pressed(Key::ArrowLeft) {
                 info!("Moving keyboard Left");
@@ -215,19 +224,48 @@ impl App {
             }
         });
     }
-
-    fn move_robot(&mut self, x: f32, y: f32) {
-        if let Some(moved) = self.robot.move_pos(&self.objects, x, y) {
-            self.move_count += 1;
-            self.path.push(moved.center());
-            if self.cleaned.iter().all(|obj| obj.rect != moved) {
-                info!("Cleaned {:?}", moved);
-                self.cleaned.push(Object {
-                    rect: moved,
-                    color: Color32::GOLD,
-                });
+    fn move_robot(&mut self, x: f32, y: f32) -> Visited {
+        let moved = self.robot.move_pos(&self.objects, x, y);
+        match moved {
+            Some(moved) => {
+                self.move_count += 1;
+                self.path.push(moved.center());
+                if self.cleaned.iter().all(|obj| obj.rect != moved) {
+                    info!("Cleaned {:?}", moved);
+                    self.cleaned.push(Object {
+                        rect: moved,
+                        color: Color32::GOLD
+                    });
+                    return Visited::Visited
+                }
+                Visited::NotVisited
             }
+            None => Visited::OutOfBounds
         }
+    }
+    fn draw(&self, ui: &mut Ui) {
+        let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
+        ui.painter().add(path);
+        // Charging point and robot
+        ui.painter()
+        .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+        ui.painter().rect(
+            self.charging_point.rect,
+            0.0,
+            self.robot.color,
+            Stroke::new(8.0, Color32::BLACK),
+        );
+        grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+        // Score display
+        ui.colored_label(
+            Color32::WHITE,
+            format!(
+                "{}/{}  moved: {}",
+                self.cleaned.len() + 1,
+                self.todo,
+                self.move_count
+            ),
+        );
     }
 }
 
@@ -248,39 +286,16 @@ impl eframe::App for App {
                 let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
-            let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
-            ui.painter().add(path);
             // User input
             match self.mode {
                 Mode::Dfs => todo!(),
                 Mode::Manually => self.keyboard_input(ui),
             }
-            // self.keyboard_input(ui);
-
-            // Charging point and robot
-            ui.painter()
-                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
-            ui.painter().rect(
-                self.charging_point.rect,
-                0.0,
-                self.robot.color,
-                Stroke::new(8.0, Color32::BLACK),
-            );
-
-            grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
-            // Score display
-            ui.colored_label(
-                Color32::WHITE,
-                format!(
-                    "{}/{}  moved: {}",
-                    self.cleaned.len() + 1,
-                    self.todo,
-                    self.move_count
-                ),
-            );
+            self.draw(ui);
         });
         ctx.request_repaint();
     }
+    
 }
 
 fn grid(ui: &Ui, width: f32, height: f32) {

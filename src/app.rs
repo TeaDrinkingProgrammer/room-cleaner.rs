@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::{Color32, Key, Pos2, Rect, Stroke, Ui, Vec2, epaint::PathShape};
 use rand::Rng;
 use serde::Serialize;
@@ -7,7 +9,7 @@ pub static WIDTH_AND_HEIGHT: f32 = 50.0;
 
 #[derive(Serialize, Debug, Clone)]
 enum Mode {
-    Dfs,
+    Dfs(Vec<Vec2>),
     Manually,
 }
 impl Default for Mode {
@@ -64,15 +66,7 @@ impl Object {
     fn move_pos(&mut self, collision_rects: &[Object], x: f32, y: f32) -> Option<Rect> {
         let translation = Vec2 { x, y };
         let moved_obj = self.rect.translate(translation);
-        if collision_rects.iter().all(|obj: &Object| {
-            let rect = obj.rect.shrink2(Vec2 { x: 0.1, y: 0.1 });
-            if rect.intersects(moved_obj) {
-                info!("Collision detected, {:?}", obj.color);
-                false
-            } else {
-                true
-            }
-        }) {
+        if no_collision(collision_rects, moved_obj) {
             let pre_moved = self.rect;
             self.rect = moved_obj;
             Some(pre_moved)
@@ -180,21 +174,7 @@ impl App {
         let robot = Object::new(&objects);
         let mut charging_point = robot.clone();
         charging_point.color = Color32::from_rgb(0, 111, 190);
-
-        let mode = match std::env::args().nth(0) {
-            Some(s) => {
-                if s.to_ascii_lowercase().starts_with("dfs") {
-                    info!("DFS");
-                    Mode::Dfs
-                } else {
-                    info!("Manually mode");
-                    Mode::Manually
-                }
-            }
-            None => Mode::Manually,
-        };
-
-        Self {
+        let mut temp = Self {
             objects,
             todo,
             path: Vec::new(),
@@ -202,9 +182,23 @@ impl App {
             move_count: 0,
             robot,
             charging_point,
-            mode,
+            mode: Mode::Manually,
             ..Self::default()
-        }
+        };
+        // temp.mode = match std::env::args().nth(1) {
+        //     Some(s) => {
+        //         if s.to_ascii_lowercase().starts_with("dfs") {
+        //             info!("DFS");
+        //             Mode::Dfs(temp.dfs())
+        //         } else {
+        //             info!("Manually mode");
+        //             Mode::Manually
+        //         }
+        //     }
+        //     None => Mode::Manually,
+        // };
+        temp.mode = Mode::Dfs(temp.dfs());
+        temp
     }
 
     fn keyboard_input(&mut self,ui: &mut Ui) {
@@ -243,6 +237,32 @@ impl App {
             None => Visited::OutOfBounds
         }
     }
+    fn dfs(&mut self) -> Vec<Vec2>{
+        let mut stack: Vec<Vec2> = Vec::new();
+        let mut instructions: Vec<Vec2> = Vec::new();
+        let mut virtual_robot = self.robot.clone();
+        let mut virtual_objects = self.objects.clone();
+        stack.push(Vec2 {x: 0.0, y: 0.0});
+        while let Some(popped) = stack.pop() {
+            instructions.push(popped);
+            virtual_objects.push(virtual_robot.clone());
+            virtual_robot.rect = virtual_robot.rect.translate(popped);
+            let tries = vec![
+                Vec2 { x: SQUARE, y: 0.0 },
+                Vec2 { x: -SQUARE, y: 0.0 },
+                Vec2 { x: 0.0, y: SQUARE },
+                Vec2 { x: 0.0, y: -SQUARE }
+            ];
+            tries.iter().for_each(|x| {
+                let temp_moved = virtual_robot.clone().rect.translate(x.clone());
+                let no_collision = no_collision(&self.objects, temp_moved);
+                if no_collision {
+                    stack.push(x.clone());
+                }
+            });
+        };
+        instructions
+    }
     fn draw(&self, ui: &mut Ui) {
         let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
         ui.painter().add(path);
@@ -266,6 +286,7 @@ impl App {
                 self.move_count
             ),
         );
+        // std::thread::sleep(Duration::from_millis(1000));
     }
 }
 
@@ -287,8 +308,13 @@ impl eframe::App for App {
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
             // User input
-            match self.mode {
-                Mode::Dfs => todo!(),
+            match &mut self.mode {
+                Mode::Dfs(ref mut x) => {
+                    if let Some(cords) = x.pop() {
+                        info!("Instruction: {:?}", cords);
+                        self.move_robot(cords.x, cords.y);
+                    }
+                },
                 Mode::Manually => self.keyboard_input(ui),
             }
             self.draw(ui);
@@ -367,4 +393,16 @@ fn rand_color() -> Color32 {
         Color32::KHAKI,
     ];
     colors[random]
+}
+
+fn no_collision(collision_rects: &[Object], moved_obj: Rect) -> bool{
+    collision_rects.iter().all(|obj: &Object| {
+        let rect = obj.rect.shrink2(Vec2 { x: 0.1, y: 0.1 });
+        if rect.intersects(moved_obj) {
+            info!("Collision detected, {:?} {:?}", obj.color, obj.rect.center());
+            false
+        } else {
+            true
+        }
+    })
 }

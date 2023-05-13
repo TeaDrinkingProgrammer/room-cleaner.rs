@@ -4,7 +4,6 @@
 extern crate log;
 mod app;
 use app::App;
-
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {

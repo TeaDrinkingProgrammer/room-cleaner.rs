@@ -5,6 +5,16 @@ use serde::Serialize;
 pub static SQUARE: f32 = 25.0;
 pub static WIDTH_AND_HEIGHT: f32 = 50.0;
 
+#[derive(Serialize, Debug, Clone)]
+enum Mode {
+    Dfs,
+    Manually,
+}
+impl Default for Mode {
+    fn default() -> Self {
+        Self::Manually
+    }
+}
 
 #[derive(Serialize, Debug, Clone)]
 struct Object {
@@ -27,7 +37,31 @@ impl Default for Object {
 
 
 impl Object {
-    fn move_pos(&mut self, collision_rects: &Vec<Object>, x: f32, y: f32) -> Option<Rect> {
+    pub fn new(collision_rects: &[Object]) -> Self {
+        let mut rng = rand::thread_rng();
+        loop {
+            let rng_x = rng.gen_range(1..31);
+            let rng_y = rng.gen_range(1..23);
+            let rect = Rect {
+                min: Pos2 {
+                    x: rng_x as f32 * SQUARE,
+                    y: rng_y as f32 * SQUARE,
+                },
+                max: Pos2 {
+                    x: (rng_x + 1) as f32 * SQUARE,
+                    y: (rng_y + 1) as f32 * SQUARE,
+                },
+            };
+            if collision_rects.iter().all(|obj| !obj.rect.intersects(rect)) {
+                return Self {
+                    rect,
+                    ..Self::default()
+                };
+            }
+        }
+    }
+
+    fn move_pos(&mut self, collision_rects: &[Object], x: f32, y: f32) -> Option<Rect> {
         let translation = Vec2 { x, y };
         let moved_obj = self.rect.translate(translation);
         if collision_rects.iter().all(|obj: &Object| {
@@ -62,8 +96,10 @@ pub(crate) struct App {
     path: Vec<Pos2>,
     cleaned: Vec<Object>,
     objects: Vec<Object>,
+    charging_point: Object,
     todo: u16,
     move_count: usize,
+    mode: Mode,
 }
 impl App {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
@@ -113,6 +149,7 @@ impl App {
             },
             color: Color32::BLACK,
         };
+
         let mut objects = generate_objects();
         objects.push(left_wall);
         objects.push(right_wall);
@@ -140,6 +177,22 @@ impl App {
             }
         }
         info!("TODO: {}", todo);
+        let robot = Object::new(&objects);
+        let mut charging_point = robot.clone();
+        charging_point.color = Color32::from_rgb(0, 111, 190);
+
+        let mode = match std::env::args().nth(0) {
+            Some(s) => {
+                if s.to_ascii_lowercase().starts_with("dfs") {
+                    info!("DFS");
+                    Mode::Dfs
+                } else {
+                    info!("Manually mode");
+                    Mode::Manually
+                }
+            }
+            None => Mode::Manually,
+        };
 
         Self {
             objects,
@@ -147,6 +200,9 @@ impl App {
             path: Vec::new(),
             cleaned: Vec::new(),
             move_count: 0,
+            robot,
+            charging_point,
+            mode,
             ..Self::default()
         }
     }
@@ -155,7 +211,7 @@ impl App {
         ui.input_mut(|i| {
             if i.key_pressed(Key::ArrowLeft) {
                 info!("Moving keyboard Left");
-                self.move_robot( -SQUARE, 0.0);
+                self.move_robot(-SQUARE, 0.0);
             } else if i.key_pressed(Key::ArrowRight) {
                 info!("Moving keyboard Right");
                 self.move_robot(SQUARE, 0.0);
@@ -190,10 +246,26 @@ impl App {
     fn draw(&self, ui: &mut Ui) {
         let path = PathShape::line(self.path.clone(), Stroke::new(5.0, Color32::GREEN));
         ui.painter().add(path);
+        // Charging point and robot
         ui.painter()
-                .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
-                grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
-                ui.colored_label(Color32::WHITE, format!("{}/{}  moved: {}",self.cleaned.len()+1, self.todo, self.move_count));
+        .rect(self.robot.rect, 0.0, self.robot.color, Stroke::NONE);
+        ui.painter().rect(
+            self.charging_point.rect,
+            0.0,
+            self.robot.color,
+            Stroke::new(8.0, Color32::BLACK),
+        );
+        grid(ui, WIDTH_AND_HEIGHT * SQUARE, WIDTH_AND_HEIGHT * SQUARE);
+        // Score display
+        ui.colored_label(
+            Color32::WHITE,
+            format!(
+                "{}/{}  moved: {}",
+                self.cleaned.len() + 1,
+                self.todo,
+                self.move_count
+            ),
+        );
     }
 }
 
@@ -205,6 +277,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::light());
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Paint collision objects
             for object in self.objects.iter() {
                 let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
@@ -213,7 +286,11 @@ impl eframe::App for App {
                 let painter = ui.painter();
                 painter.rect(object.rect, 0.0, object.color, Stroke::NONE);
             }
-            self.keyboard_input(ui);
+            // User input
+            match self.mode {
+                Mode::Dfs => todo!(),
+                Mode::Manually => self.keyboard_input(ui),
+            }
             self.draw(ui);
         });
         ctx.request_repaint();
@@ -275,14 +352,6 @@ fn generate_objects() -> Vec<Object> {
         }
     }
     objects
-}
-
-fn probe(objects: &Vec<Object>, x: f32, y: f32) -> bool {
-    let probe = Rect {
-        min: Pos2::new(x, y),
-        max: Pos2::new(x + SQUARE, y + SQUARE),
-    };
-    objects.iter().any(|obj| obj.rect.intersects(probe))
 }
 
 fn rand_color() -> Color32 {

@@ -3,16 +3,14 @@
 #[macro_use]
 extern crate log;
 mod app;
+mod generators;
+mod object;
 use app::App;
 
-// When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    // Log to stdout (if you run with `RUST_LOG=debug`).
-
-    use egui::Vec2;
-
     use crate::app::{SQUARE, WIDTH_AND_HEIGHT};
+    use egui::Vec2;
     tracing_subscriber::fmt::init();
     info!("starting up");
     let window_size = Some(Vec2 {
